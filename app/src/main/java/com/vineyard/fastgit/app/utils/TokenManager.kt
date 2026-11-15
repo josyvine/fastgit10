@@ -227,9 +227,13 @@ class TokenManager(context: Context) {
         private const val KEY_OAUTH_CLIENT_ID = "oauth_client_id"
         private const val KEY_OAUTH_CLIENT_SECRET = "oauth_client_secret"
 
-        // Production Admin GitHub OAuth Client ID (Device Flow enabled)
-        const val DEFAULT_CLIENT_ID = "Ov23lijUer4XCyoGdmvw"
-        const val DEFAULT_CLIENT_SECRET = "fastgit_oauth_app_secret"
+        // Production Admin GitHub OAuth Client ID & Secret resolved from Native C++ (.so)
+        val DEFAULT_CLIENT_ID: String
+            get() = NativeBridge.getOAuthClientId()
+
+        val DEFAULT_CLIENT_SECRET: String
+            get() = NativeBridge.getOAuthClientSecret()
+
         const val OAUTH_REDIRECT_URI = "fastgit://oauth-callback"
     }
 }
