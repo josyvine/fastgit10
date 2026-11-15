@@ -13,8 +13,9 @@ import com.vineyard.fastgit.app.database.KeystoreProfileEntity
 import com.vineyard.fastgit.app.models.*
 import com.vineyard.fastgit.app.network.RetrofitClient
 import com.vineyard.fastgit.app.utils.AppLogger
-import com.vineyard.fastgit.app.utils.TokenManager
 import com.vineyard.fastgit.app.utils.DownloadUtils
+import com.vineyard.fastgit.app.utils.NativeBridge
+import com.vineyard.fastgit.app.utils.TokenManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -528,7 +529,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 }.toString()
 
                 val request = Request.Builder()
-                    .url("https://formspree.io/f/xyzenlao")
+                    .url(NativeBridge.getContactEndpoint())
                     .header("Accept", "application/json")
                     .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
                     .build()
