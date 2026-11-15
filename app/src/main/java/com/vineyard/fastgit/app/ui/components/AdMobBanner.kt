@@ -20,13 +20,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
-
-private const val DEFAULT_BANNER_AD_UNIT_ID = "ca-app-pub-2223803405403727/5923559214"
+import com.vineyard.fastgit.app.utils.NativeBridge
 
 @Composable
 fun AdMobBanner(
     modifier: Modifier = Modifier,
-    adUnitId: String = DEFAULT_BANNER_AD_UNIT_ID
+    adUnitId: String? = null
 ) {
     if (LocalInspectionMode.current) {
         return
@@ -36,13 +35,17 @@ fun AdMobBanner(
     val lifecycleOwner = LocalLifecycleOwner.current
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.coerceAtLeast(320)
 
+    val resolvedAdUnitId = remember(adUnitId) {
+        adUnitId ?: NativeBridge.getAdMobBannerUnitId()
+    }
+
     val adSize = remember(screenWidthDp) {
         AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, screenWidthDp)
     }
 
-    val adView = remember(adUnitId, adSize) {
+    val adView = remember(resolvedAdUnitId, adSize) {
         AdView(context).apply {
-            this.adUnitId = adUnitId
+            this.adUnitId = resolvedAdUnitId
             setAdSize(adSize)
             loadAd(AdRequest.Builder().build())
         }
