@@ -47,19 +47,17 @@ object AppLogger {
     }
 
     /**
-     * Initializes the Global Crash Handler and creates the public 'fastgit log' folder in Downloads, Documents & SDCARD.
+     * Initializes the Global Crash Handler and creates the 'fastgit log' folder in Scoped Storage-compliant locations.
      */
     fun initCrashHandler(context: Context) {
         appContext = context.applicationContext
-        
-        // Ensure public SDCARD 'fastgit log' directories exist in Download, Documents, and Root SDCARD
+
         val createdDirs = getPublicSdcardLogDirs()
-        val primaryPath = createdDirs.firstOrNull()?.absolutePath ?: "/storage/emulated/0/Download/fastgit log"
+        val primaryPath = createdDirs.firstOrNull()?.absolutePath ?: "Downloads/FastGit/Logs"
 
-        i("AppLogger", "Public 'fastgit log' folder initialized!")
-        i("AppLogger", "Log Folder Location: $primaryPath (Check Download or Documents folder in File Manager)")
+        i("AppLogger", "App 'fastgit log' folder initialized!")
+        i("AppLogger", "Log Folder Location: $primaryPath (Use Save File to export to Downloads/FastGit/Logs)")
 
-        // Save an initialization session log file to public 'fastgit log' folders
         saveLogToPublicSdcard("FastGit Session Started at ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}\nLog Directory: $primaryPath")
 
         if (defaultUncaughtExceptionHandler == null) {
@@ -72,54 +70,55 @@ object AppLogger {
     }
 
     /**
-     * Obtains all accessible public log directory locations: Download/fastgit log, Documents/fastgit log, /sdcard/fastgit log
+     * Obtains Scoped Storage-compliant log directory locations (no MANAGE_EXTERNAL_STORAGE required).
      */
     fun getPublicSdcardLogDirs(): List<File> {
         val candidates = mutableListOf<File>()
 
-        // 1. Download folder (Most visible in standard file managers)
-        try {
-            val downloadDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "fastgit log")
-            if (!downloadDir.exists()) downloadDir.mkdirs()
-            if (downloadDir.exists()) candidates.add(downloadDir)
-        } catch (e: Exception) {
-            Log.e("AppLogger", "Error creating Download/fastgit log: ${e.message}")
-        }
-
-        // 2. Documents folder
-        try {
-            val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "fastgit log")
-            if (!docDir.exists()) docDir.mkdirs()
-            if (docDir.exists()) candidates.add(docDir)
-        } catch (e: Exception) {
-            Log.e("AppLogger", "Error creating Documents/fastgit log: ${e.message}")
-        }
-
-        // 3. Direct SDCard Root / Emulated storage
-        try {
-            val sdcardDir = File("/sdcard/fastgit log")
-            if (!sdcardDir.exists()) sdcardDir.mkdirs()
-            if (sdcardDir.exists()) candidates.add(sdcardDir)
-        } catch (e: Exception) {
-            Log.e("AppLogger", "Error creating /sdcard/fastgit log: ${e.message}")
-        }
-
-        // 4. Fallback App External Files Dir
+        // 1. App-specific External Files Dir (Works on all Android versions without special permissions)
         appContext?.let { ctx ->
             try {
                 val appExternalDir = File(ctx.getExternalFilesDir(null), "fastgit log")
                 if (!appExternalDir.exists()) appExternalDir.mkdirs()
-                if (appExternalDir.exists()) candidates.add(appExternalDir)
+                if (appExternalDir.exists() && appExternalDir.canWrite()) candidates.add(appExternalDir)
             } catch (e: Exception) {
                 Log.e("AppLogger", "Error creating App External files dir: ${e.message}")
             }
+
+            // 2. App Internal Files Dir fallback
+            if (candidates.isEmpty()) {
+                try {
+                    val internalDir = File(ctx.filesDir, "fastgit log")
+                    if (!internalDir.exists()) internalDir.mkdirs()
+                    if (internalDir.exists() && internalDir.canWrite()) candidates.add(internalDir)
+                } catch (e: Exception) {
+                    Log.e("AppLogger", "Error creating App Internal files dir: ${e.message}")
+                }
+            }
         }
 
-        return candidates.ifEmpty {
-            val fallback = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "fastgit log")
-            fallback.mkdirs()
-            listOf(fallback)
+        // 3. Legacy public directories only on Android 9 and below (where Scoped Storage is not enforced)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            try {
+                @Suppress("DEPRECATION")
+                val downloadDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "fastgit log")
+                if (!downloadDir.exists()) downloadDir.mkdirs()
+                if (downloadDir.exists() && downloadDir.canWrite()) candidates.add(downloadDir)
+            } catch (e: Exception) {
+                Log.e("AppLogger", "Error creating Download/fastgit log: ${e.message}")
+            }
+
+            try {
+                @Suppress("DEPRECATION")
+                val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "fastgit log")
+                if (!docDir.exists()) docDir.mkdirs()
+                if (docDir.exists() && docDir.canWrite()) candidates.add(docDir)
+            } catch (e: Exception) {
+                Log.e("AppLogger", "Error creating Documents/fastgit log: ${e.message}")
+            }
         }
+
+        return candidates.distinctBy { it.absolutePath }
     }
 
     fun i(tag: String, message: String) {
@@ -140,7 +139,7 @@ object AppLogger {
         }
         addLog(LogEntry(tag = tag, message = fullMessage, isError = true, isSuccess = false))
 
-        // Save error report immediately to public SDCARD 'fastgit log' directory
+        // Save error report immediately to log directory
         saveErrorReportToPublicSdcard(tag, fullMessage, throwable)
     }
 
@@ -180,13 +179,13 @@ object AppLogger {
             append("====================================================\n")
         }.toString()
 
-        // 1. Write crash file to public SDCARD 'fastgit log'
+        // 1. Write crash file to log directory
         saveCrashFileToPublicSdcard(fileName, crashReport)
 
         // 2. Also append to 'fastgit_all_crashes.log' in the same folder
         saveCrashFileToPublicSdcard("fastgit_all_crashes.log", "\n\n$crashReport", append = true)
 
-        Log.e("FastGitCrash", "CRASH DETECTED AND SAVED TO PUBLIC SDCARD 'fastgit log/$fileName'", throwable)
+        Log.e("FastGitCrash", "CRASH DETECTED AND SAVED TO 'fastgit log/$fileName'", throwable)
 
         // Forward to default system exception handler
         defaultUncaughtExceptionHandler?.uncaughtException(thread, throwable)
@@ -206,6 +205,23 @@ object AppLogger {
             append(getFullLogText()).append("\n")
         }.toString()
 
+        // Export to public Downloads/FastGit/Logs via Scoped Storage MediaStore (Play Store compliant)
+        appContext?.let { ctx ->
+            try {
+                val publicFile = DownloadUtils.saveTextToDownloads(
+                    context = ctx,
+                    subFolder = "Logs",
+                    fileName = fileName,
+                    content = fullContent
+                )
+                if (publicFile != null) {
+                    exportedPaths.add(publicFile.absolutePath)
+                }
+            } catch (e: Exception) {
+                Log.e("AppLogger", "Failed to export logs via MediaStore: ${e.message}")
+            }
+        }
+
         for (dir in getPublicSdcardLogDirs()) {
             try {
                 if (!dir.exists()) dir.mkdirs()
@@ -218,7 +234,7 @@ object AppLogger {
                 Log.e("AppLogger", "Failed to export logs to ${dir.absolutePath}: ${e.message}")
             }
         }
-        return exportedPaths
+        return exportedPaths.distinct()
     }
 
     private fun saveCrashFileToPublicSdcard(fileName: String, content: String, append: Boolean = false) {
@@ -302,4 +318,3 @@ object AppLogger {
         }
     }
 }
-
