@@ -1,5 +1,5 @@
 # ===================================================================
-# 1. Anti-Debugging & Metadata Stripping (Anti-Zip Decompilation)
+# 1. Anti-Debugging, Package Flattening & Metadata Stripping
 # ===================================================================
 
 # Strip all standard Android system Logcat calls from release bytecode
@@ -12,6 +12,10 @@
     public static *** println(...);
 }
 
+# Flatten all obfuscated classes into a single short package and allow access optimization
+-repackageclasses 'o'
+-allowaccessmodification
+
 # Obfuscate source file names (replaces all original .kt/.java file names with 'SourceFile' in decompilers)
 -renamesourcefileattribute 'SourceFile'
 
@@ -23,23 +27,12 @@
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
 # ===================================================================
-# 2. In-Memory Loader & Stub Application Protection
+# 2. Application Entry Components
 # ===================================================================
 
-# Keep StubApplication intact so Android can launch the shell
 -keep class com.vineyard.fastgit.app.StubApplication {
     public <init>();
-    protected void attachBaseContext(android.content.Context);
-    *;
 }
-
-# Preserve ClassLoader reflection fields utilized by InMemoryDexClassLoader
--keepclassmembers class java.lang.ClassLoader {
-    private java.lang.ClassLoader parent;
-    *;
-}
-
-# Preserve Android standard application entry components
 -keep class * extends android.app.Application
 -keep class * extends android.app.Activity
 -keep class * extends androidx.core.content.FileProvider
@@ -48,7 +41,8 @@
 # 3. Model Serialization & Networking (Moshi, Retrofit, & OkHttp)
 # ===================================================================
 
-# Moshi JSON adapters and codegen classes
+# Moshi JSON adapters, Kotlin metadata, and model classes
+-keep class kotlin.Metadata { *; }
 -keepclassmembers class * {
     @com.squareup.moshi.Json *;
 }
@@ -57,9 +51,10 @@
 -keep class * extends com.squareup.moshi.JsonAdapter
 -keep class com.squareup.moshi.** { *; }
 
-# Network API response data classes (WorkflowRunJobsResponse, WorkflowJob, WorkflowStep)
--keep class com.vineyard.fastgit.app.network.** { *; }
--keepclassmembers class com.vineyard.fastgit.app.network.** { *; }
+# Network response data classes used by Retrofit/Moshi
+-keep class com.vineyard.fastgit.app.network.WorkflowRunJobsResponse { *; }
+-keep class com.vineyard.fastgit.app.network.WorkflowJob { *; }
+-keep class com.vineyard.fastgit.app.network.WorkflowStep { *; }
 
 # Retrofit service interfaces, proxy methods, and OkHttp streams
 -keep class retrofit2.** { *; }
@@ -81,8 +76,6 @@
 -keep class * extends androidx.room.RoomDatabase
 -keep @androidx.room.Entity class * { *; }
 -keep @androidx.room.Dao interface * { *; }
--keep interface com.vineyard.fastgit.app.database.** { *; }
--keep class com.vineyard.fastgit.app.database.** { *; }
 
 # LazySodium and Java Native Access (JNA) native bindings
 -keep class com.goterl.lazysodium.** { *; }
@@ -95,75 +88,32 @@
 -dontwarn com.sun.jna.**
 
 # ===================================================================
-# 5. Kotlin Coroutines & Flow (Cross-Dex Signature Synchronization)
+# 5. Native C++ JNI Bridge (Level 2 NDK Protection)
 # ===================================================================
 
-# Preserves Coroutine Flow method descriptors across InMemoryDexClassLoader and APK
--keep class kotlinx.coroutines.** { *; }
--keep interface kotlinx.coroutines.** { *; }
+# Preserve JNI class and native method names for libfastgit_native.so lookup
+-keep class com.vineyard.fastgit.app.utils.NativeBridge {
+    *;
+}
+
+# ===================================================================
+# 6. ViewModel Constructors & Library Warning Suppressions
+# ===================================================================
+
+# Allow ViewModelProvider reflection on constructors while obfuscating ViewModel names & methods
+-keepclassmembers class * extends androidx.lifecycle.ViewModel {
+    public <init>(...);
+}
+
 -dontwarn kotlinx.coroutines.**
-
-# ===================================================================
-# 6. Kotlin Runtime & Standard Library (Intrinsics & Reflection)
-# ===================================================================
-
-# Prevents R8 from stripping or inlining Kotlin runtime internals required by external DEX
--keep class kotlin.jvm.internal.** { *; }
--keep class kotlin.** { *; }
--keep interface kotlin.** { *; }
 -dontwarn kotlin.**
-
-# ===================================================================
-# 7. App Logger & Crash Reporting Protection
-# ===================================================================
-
-# Keep AppLogger, crash handlers, LogEntry, and all utility classes completely intact
--keep class com.vineyard.fastgit.app.utils.** { *; }
--keepclassmembers class com.vineyard.fastgit.app.utils.** { *; }
-
-# ===================================================================
-# 8. ViewModels & Architecture Components
-# ===================================================================
-
-# Protect ViewModels from reflection destruction during Compose navigation
--keep class com.vineyard.fastgit.app.viewmodel.** { *; }
--keepclassmembers class com.vineyard.fastgit.app.viewmodel.** { *; }
-
-# ===================================================================
-# 9. AndroidX Core, Activity & Lifecycle Protection
-# ===================================================================
-
--keep class androidx.core.content.ContextCompat { *; }
--keep class androidx.core.app.ActivityCompat { *; }
--keep class androidx.core.view.** { *; }
 -dontwarn androidx.core.**
-
--keep class androidx.activity.** { *; }
 -dontwarn androidx.activity.**
-
--keep class androidx.lifecycle.** { *; }
 -dontwarn androidx.lifecycle.**
-
-# ===================================================================
-# 10. Jetpack Compose Core Engine & Material Icons
-# ===================================================================
-
-# Essential runtime (fixes ComposableLambdaKt)
--keep class androidx.compose.runtime.** { *; }
-
-# Essential UI foundations & Material3
--keep class androidx.compose.ui.** { *; }
--keep class androidx.compose.foundation.** { *; }
--keep class androidx.compose.animation.** { *; }
--keep class androidx.compose.material3.** { *; }
-
-# Core, Filled, and AutoMirrored icons (fixes ExitToAppKt and all settings/tab icons)
--keep class androidx.compose.material.icons.** { *; }
-
 -dontwarn androidx.compose.**
 
 # ===================================================================
-# 11. Android Generated Resource IDs (R Classes)
+# 7. Android Generated Resource IDs (R Classes)
 # ===================================================================
 
 # Prevent R8 from inlining and discarding generated R inner classes
@@ -174,7 +124,7 @@
 }
 
 # ===================================================================
-# 12. Google Mobile Ads (AdMob) SDK Protection
+# 8. Google Mobile Ads (AdMob) SDK Protection
 # ===================================================================
 
 -keep class com.google.android.gms.ads.** { *; }
