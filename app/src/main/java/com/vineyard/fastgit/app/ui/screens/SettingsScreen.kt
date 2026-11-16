@@ -123,6 +123,13 @@ fun SettingsScreen(
         }
     }
 
+    // Refresh repository list automatically when opening Keys or URLs tab
+    LaunchedEffect(selectedTabIndex) {
+        if (selectedTabIndex == 1 || selectedTabIndex == 2) {
+            settingsViewModel.loadUserRepositories()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
