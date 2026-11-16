@@ -65,6 +65,7 @@ fun MainScreen(
             repositoryViewModel.fetchRepositories()
             notificationViewModel.loadNotifications()
             profileViewModel.loadProfile()
+            settingsViewModel.loadUserRepositories()
             // Reset active repo detail view if user switched accounts
             activeDetailRepo = null
         }
@@ -95,6 +96,9 @@ fun MainScreen(
                 onBack = {
                     AppLogger.i("MainScreen", "Navigating back from RepoDetail")
                     activeDetailRepo = null
+                    homeViewModel.loadHomeData()
+                    repositoryViewModel.fetchRepositories()
+                    settingsViewModel.loadUserRepositories()
                 }
             )
         } else {
