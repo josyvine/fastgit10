@@ -17,7 +17,7 @@ interface GitHubApiService {
     // Repositories
     @GET("user/repos")
     suspend fun getUserRepositories(
-        @Query("sort") sort: String = "updated",
+        @Query("sort") sort: String = "pushed",
         @Query("direction") direction: String = "desc",
         @Query("per_page") perPage: Int = 100,
         @Query("page") page: Int = 1
